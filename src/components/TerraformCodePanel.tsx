@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, Download } from "lucide-react";
+import { Copy, Download, RefreshCw } from "lucide-react";
+import { generateTerraformCode } from "@/api/terraform-api";
+import { NodeItem, ConnectionItem } from "./Canvas";
 
 interface TerraformCodePanelProps {
-  nodes: any[];
-  connections: any[];
+  nodes: NodeItem[];
+  connections: ConnectionItem[];
 }
 
 const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
@@ -14,102 +16,113 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   connections,
 }) => {
   const [activeTab, setActiveTab] = useState("main");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [terraformCode, setTerraformCode] = useState({
+    mainTf:
+      '# No resources defined yet\n\nprovider "aws" {\n  region = var.aws_region\n}',
+    variablesTf:
+      '# Variables\n\nvariable "aws_region" {\n  description = "AWS region"\n  type        = string\n  default     = "us-east-1"\n}',
+    outputsTf: "# No outputs defined yet",
+  });
 
-  const mainTfCode = `# Generated Terraform Code
-
-provider "aws" {
-  region = "us-east-1"
-}
-
-${nodes
-  .map((node) => {
-    if (node.type === "ec2") {
-      return `resource "aws_instance" "${node.id}" {
-  ami           = "ami-0c55b159cbfafe1f0"
-  instance_type = "t2.micro"
-  tags = {
-    Name = "${node.title}"
-  }
-}`;
-    } else if (node.type === "s3") {
-      return `resource "aws_s3_bucket" "${node.id}" {
-  bucket = "${node.title.toLowerCase().replace(/ /g, "-")}"
-  tags = {
-    Name = "${node.title}"
-  }
-}`;
-    } else if (node.type === "rds") {
-      return `resource "aws_db_instance" "${node.id}" {
-  allocated_storage    = 10
-  engine               = "mysql"
-  engine_version       = "5.7"
-  instance_class       = "db.t3.micro"
-  name                 = "${node.title.toLowerCase().replace(/ /g, "_")}"
-  username             = "admin"
-  password             = var.db_password
-  parameter_group_name = "default.mysql5.7"
-  skip_final_snapshot  = true
-}`;
+  // Generate Terraform code when nodes or connections change
+  useEffect(() => {
+    if (nodes.length > 0) {
+      handleGenerateCode();
     }
-    return "";
-  })
-  .join("\n\n")}`;
+  }, []);
 
-  const variablesTfCode = `# Variables
+  const handleGenerateCode = async () => {
+    if (isGenerating) return;
 
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "db_password" {
-  description = "Password for database"
-  type        = string
-  sensitive   = true
-}
-
-variable "environment" {
-  description = "Deployment environment"
-  type        = string
-  default     = "dev"
-}
-`;
-
-  const outputsTfCode = `# Outputs
-
-${nodes
-  .map((node) => {
-    if (node.type === "ec2") {
-      return `output "${node.id}_public_ip" {
-  description = "Public IP of ${node.title}"
-  value       = aws_instance.${node.id}.public_ip
-}`;
-    } else if (node.type === "s3") {
-      return `output "${node.id}_bucket_name" {
-  description = "Name of ${node.title}"
-  value       = aws_s3_bucket.${node.id}.bucket
-}`;
-    } else if (node.type === "rds") {
-      return `output "${node.id}_endpoint" {
-  description = "Endpoint of ${node.title}"
-  value       = aws_db_instance.${node.id}.endpoint
-}`;
+    setIsGenerating(true);
+    try {
+      const result = await generateTerraformCode(nodes, connections);
+      setTerraformCode(result);
+    } catch (error) {
+      console.error("Error generating Terraform code:", error);
+    } finally {
+      setIsGenerating(false);
     }
-    return "";
-  })
-  .join("\n\n")}`;
+  };
+
+  const handleCopyCode = () => {
+    let codeToCopy = "";
+
+    switch (activeTab) {
+      case "main":
+        codeToCopy = terraformCode.mainTf;
+        break;
+      case "variables":
+        codeToCopy = terraformCode.variablesTf;
+        break;
+      case "outputs":
+        codeToCopy = terraformCode.outputsTf;
+        break;
+    }
+
+    navigator.clipboard.writeText(codeToCopy);
+  };
+
+  const handleDownload = () => {
+    const files = [
+      { name: "main.tf", content: terraformCode.mainTf },
+      { name: "variables.tf", content: terraformCode.variablesTf },
+      { name: "outputs.tf", content: terraformCode.outputsTf },
+    ];
+
+    // Create a zip file using JSZip (in a real app)
+    // For now, just download the current file
+    let fileName = "";
+    let content = "";
+
+    switch (activeTab) {
+      case "main":
+        fileName = "main.tf";
+        content = terraformCode.mainTf;
+        break;
+      case "variables":
+        fileName = "variables.tf";
+        content = terraformCode.variablesTf;
+        break;
+      case "outputs":
+        fileName = "outputs.tf";
+        content = terraformCode.outputsTf;
+        break;
+    }
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="h-full flex flex-col border rounded-md bg-background">
       <div className="p-4 border-b flex justify-between items-center">
         <h3 className="font-medium">Generated Terraform Code</h3>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleGenerateCode}
+            disabled={isGenerating}
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-1 ${isGenerating ? "animate-spin" : ""}`}
+            />
+            {isGenerating ? "Generating..." : "Refresh"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleCopyCode}>
             <Copy className="h-4 w-4 mr-1" />
             Copy
           </Button>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-1" />
             Download
           </Button>
@@ -138,19 +151,19 @@ ${nodes
         <ScrollArea className="flex-1">
           <TabsContent value="main" className="p-4 mt-0">
             <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-              {mainTfCode}
+              {terraformCode.mainTf}
             </pre>
           </TabsContent>
 
           <TabsContent value="variables" className="p-4 mt-0">
             <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-              {variablesTfCode}
+              {terraformCode.variablesTf}
             </pre>
           </TabsContent>
 
           <TabsContent value="outputs" className="p-4 mt-0">
             <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-              {outputsTfCode}
+              {terraformCode.outputsTf}
             </pre>
           </TabsContent>
         </ScrollArea>

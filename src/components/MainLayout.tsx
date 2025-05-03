@@ -5,12 +5,13 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import Sidebar from "@/components/Sidebar";
-import Canvas from "@/components/Canvas";
+import Canvas, { NodeItem, ConnectionItem } from "@/components/Canvas";
 import ConfigPanel from "@/components/ConfigPanel";
 import TerraformCodePanel from "@/components/TerraformCodePanel";
 import DeploymentModal from "@/components/DeploymentModal";
 import { Button } from "@/components/ui/button";
 import { Code, Play } from "lucide-react";
+import { ServiceType } from "@/lib/aws-service-configs";
 
 const MainLayout: React.FC = () => {
   const [showCodePanel, setShowCodePanel] = useState(false);
@@ -19,14 +20,25 @@ const MainLayout: React.FC = () => {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     string | null
   >(null);
-  const [nodes, setNodes] = useState([]);
-  const [connections, setConnections] = useState([]);
+  const [nodes, setNodes] = useState<NodeItem[]>([]);
+  const [connections, setConnections] = useState<ConnectionItem[]>([]);
 
-  const handleDragStart = (event: React.DragEvent, serviceType: string) => {
+  const handleDragStart = (
+    event: React.DragEvent,
+    serviceType: ServiceType,
+  ) => {
     event.dataTransfer.setData("serviceType", serviceType);
   };
 
-  const handleNodeUpdate = (nodeId: string, updates: any) => {
+  const handleNodesChange = (updatedNodes: NodeItem[]) => {
+    setNodes(updatedNodes);
+  };
+
+  const handleConnectionsChange = (updatedConnections: ConnectionItem[]) => {
+    setConnections(updatedConnections);
+  };
+
+  const handleNodeUpdate = (nodeId: string, updates: Partial<NodeItem>) => {
     setNodes(
       nodes.map((node) =>
         node.id === nodeId ? { ...node, ...updates } : node,
@@ -34,7 +46,10 @@ const MainLayout: React.FC = () => {
     );
   };
 
-  const handleConnectionUpdate = (connectionId: string, updates: any) => {
+  const handleConnectionUpdate = (
+    connectionId: string,
+    updates: Partial<ConnectionItem>,
+  ) => {
     setConnections(
       connections.map((connection) =>
         connection.id === connectionId
@@ -93,7 +108,16 @@ const MainLayout: React.FC = () => {
           <ResizablePanel defaultSize={60} minSize={30}>
             <ResizablePanelGroup direction="vertical">
               <ResizablePanel defaultSize={showCodePanel ? 60 : 100}>
-                <Canvas />
+                <Canvas
+                  nodes={nodes}
+                  connections={connections}
+                  onNodesChange={handleNodesChange}
+                  onConnectionsChange={handleConnectionsChange}
+                  onSelectNode={setSelectedNodeId}
+                  onSelectConnection={setSelectedConnectionId}
+                  selectedNodeId={selectedNodeId}
+                  selectedConnectionId={selectedConnectionId}
+                />
               </ResizablePanel>
 
               {showCodePanel && (
@@ -116,6 +140,8 @@ const MainLayout: React.FC = () => {
             <ConfigPanel
               selectedNodeId={selectedNodeId}
               selectedConnectionId={selectedConnectionId}
+              nodes={nodes}
+              connections={connections}
               onNodeUpdate={handleNodeUpdate}
               onConnectionUpdate={handleConnectionUpdate}
               onDeleteNode={handleDeleteNode}

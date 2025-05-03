@@ -1,43 +1,65 @@
 import React, { useState, useRef, useEffect } from "react";
 import { CanvasContainer } from "@/components/ui/canvas-container";
 import { Node } from "@/components/ui/node";
-import { Connection } from "@/components/ui/connection";
-import { Server, Database, HardDrive, Box, Cloud } from "lucide-react";
+import ConnectionLine from "@/components/ui/connection-line";
+import { Server, Database, HardDrive, Box, Cloud, Plus } from "lucide-react";
+import { ServiceType } from "@/lib/aws-service-configs";
 
-interface NodeItem {
+export interface NodeItem {
   id: string;
-  type: string;
+  type: ServiceType;
   x: number;
   y: number;
   title: string;
+  config: Record<string, any>;
 }
 
-interface ConnectionItem {
+export interface ConnectionItem {
   id: string;
   sourceId: string;
   targetId: string;
+  type: string;
+  description?: string;
 }
 
-const Canvas: React.FC = () => {
-  const [nodes, setNodes] = useState<NodeItem[]>([]);
-  const [connections, setConnections] = useState<ConnectionItem[]>([]);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<
-    string | null
-  >(null);
+interface CanvasProps {
+  nodes: NodeItem[];
+  connections: ConnectionItem[];
+  onNodesChange: (nodes: NodeItem[]) => void;
+  onConnectionsChange: (connections: ConnectionItem[]) => void;
+  onSelectNode: (nodeId: string | null) => void;
+  onSelectConnection: (connectionId: string | null) => void;
+  selectedNodeId: string | null;
+  selectedConnectionId: string | null;
+}
+
+const Canvas: React.FC<CanvasProps> = ({
+  nodes,
+  connections,
+  onNodesChange,
+  onConnectionsChange,
+  onSelectNode,
+  onSelectConnection,
+  selectedNodeId,
+  selectedConnectionId,
+}) => {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStart, setConnectionStart] = useState<{
     id: string;
     x: number;
     y: number;
   } | null>(null);
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [connectionEnd, setConnectionEnd] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const serviceType = e.dataTransfer.getData("serviceType");
+    const serviceType = e.dataTransfer.getData("serviceType") as ServiceType;
     if (!serviceType || !canvasRef.current) return;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -50,13 +72,14 @@ const Canvas: React.FC = () => {
       x,
       y,
       title: getServiceTitle(serviceType),
+      config: {},
     };
 
-    setNodes([...nodes, newNode]);
-    setSelectedNodeId(newNode.id);
+    onNodesChange([...nodes, newNode]);
+    onSelectNode(newNode.id);
   };
 
-  const getServiceTitle = (type: string): string => {
+  const getServiceTitle = (type: ServiceType): string => {
     switch (type) {
       case "ec2":
         return "EC2 Instance";
@@ -77,7 +100,7 @@ const Canvas: React.FC = () => {
     }
   };
 
-  const getServiceIcon = (type: string) => {
+  const getServiceIcon = (type: ServiceType) => {
     switch (type) {
       case "ec2":
         return <Server className="h-6 w-6" />;
@@ -104,11 +127,20 @@ const Canvas: React.FC = () => {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
-    setSelectedNodeId(nodeId);
+    // If holding shift, start connection
+    if (e.shiftKey) {
+      e.stopPropagation();
+      setIsConnecting(true);
+      setConnectionStart({ id: nodeId, x: node.x, y: node.y });
+      setConnectionEnd({ x: node.x, y: node.y });
+      return;
+    }
+
+    onSelectNode(nodeId);
     setIsDragging(true);
 
     // Calculate offset from node position to mouse position
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDragOffset({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
@@ -121,58 +153,62 @@ const Canvas: React.FC = () => {
       const x = e.clientX - canvasRect.left - dragOffset.x;
       const y = e.clientY - canvasRect.top - dragOffset.y;
 
-      setNodes(
-        nodes.map((node) =>
-          node.id === selectedNodeId ? { ...node, x, y } : node,
-        ),
+      const updatedNodes = nodes.map((node) =>
+        node.id === selectedNodeId ? { ...node, x, y } : node,
       );
+
+      onNodesChange(updatedNodes);
     } else if (isConnecting && connectionStart && canvasRef.current) {
-      // Handle drawing connection line while connecting
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const x = e.clientX - canvasRect.left;
+      const y = e.clientY - canvasRect.top;
+
+      setConnectionEnd({ x, y });
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
     setIsDragging(false);
-    if (isConnecting) {
+
+    if (isConnecting && connectionStart && connectionEnd) {
+      // Check if mouse is over a node
+      const targetNode = nodes.find((node) => {
+        const dx = node.x - connectionEnd.x;
+        const dy = node.y - connectionEnd.y;
+        // Check if within 50px radius of node center
+        return Math.sqrt(dx * dx + dy * dy) < 50;
+      });
+
+      if (targetNode && targetNode.id !== connectionStart.id) {
+        // Create a new connection
+        const newConnection: ConnectionItem = {
+          id: `conn-${Date.now()}`,
+          sourceId: connectionStart.id,
+          targetId: targetNode.id,
+          type: "default",
+        };
+
+        onConnectionsChange([...connections, newConnection]);
+        onSelectConnection(newConnection.id);
+      }
+
       setIsConnecting(false);
       setConnectionStart(null);
+      setConnectionEnd(null);
     }
-  };
-
-  const handleNodeClick = (nodeId: string) => {
-    setSelectedNodeId(nodeId);
-    setSelectedConnectionId(null);
-  };
-
-  const handleConnectionClick = (connectionId: string) => {
-    setSelectedConnectionId(connectionId);
-    setSelectedNodeId(null);
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     // Only deselect if clicking directly on the canvas, not on a node or connection
     if (e.target === canvasRef.current) {
-      setSelectedNodeId(null);
-      setSelectedConnectionId(null);
+      onSelectNode(null);
+      onSelectConnection(null);
     }
   };
 
-  const startConnection = (nodeId: string, x: number, y: number) => {
-    setIsConnecting(true);
-    setConnectionStart({ id: nodeId, x, y });
-  };
-
-  const completeConnection = (targetNodeId: string) => {
-    if (connectionStart && targetNodeId !== connectionStart.id) {
-      const newConnection: ConnectionItem = {
-        id: `conn-${Date.now()}`,
-        sourceId: connectionStart.id,
-        targetId: targetNodeId,
-      };
-      setConnections([...connections, newConnection]);
-    }
-    setIsConnecting(false);
-    setConnectionStart(null);
+  const handleConnectionClick = (connectionId: string) => {
+    onSelectConnection(connectionId);
+    onSelectNode(null);
   };
 
   return (
@@ -183,8 +219,10 @@ const Canvas: React.FC = () => {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onClick={handleCanvasClick}
+      className={isConnecting ? "cursor-crosshair" : undefined}
     >
       <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
+        {/* Existing connections */}
         {connections.map((connection) => {
           const sourceNode = nodes.find((n) => n.id === connection.sourceId);
           const targetNode = nodes.find((n) => n.id === connection.targetId);
@@ -192,18 +230,29 @@ const Canvas: React.FC = () => {
           if (!sourceNode || !targetNode) return null;
 
           return (
-            <Connection
-              key={connection.id}
-              startX={sourceNode.x + 50}
-              startY={sourceNode.y + 50}
-              endX={targetNode.x + 50}
-              endY={targetNode.y + 50}
-              selected={selectedConnectionId === connection.id}
-              onClick={() => handleConnectionClick(connection.id)}
-              className="pointer-events-auto"
-            />
+            <g key={connection.id} className="pointer-events-auto">
+              <ConnectionLine
+                startX={sourceNode.x}
+                startY={sourceNode.y}
+                endX={targetNode.x}
+                endY={targetNode.y}
+                isSelected={selectedConnectionId === connection.id}
+                onClick={() => handleConnectionClick(connection.id)}
+              />
+            </g>
           );
         })}
+
+        {/* Connection being created */}
+        {isConnecting && connectionStart && connectionEnd && (
+          <ConnectionLine
+            startX={connectionStart.x}
+            startY={connectionStart.y}
+            endX={connectionEnd.x}
+            endY={connectionEnd.y}
+            isCreating={true}
+          />
+        )}
       </svg>
 
       {nodes.map((node) => (
@@ -216,16 +265,29 @@ const Canvas: React.FC = () => {
             transform: "translate(-50%, -50%)",
           }}
           onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
-          onClick={() => handleNodeClick(node.id)}
         >
           <Node
             title={node.title}
             type={node.type}
             icon={getServiceIcon(node.type)}
             selected={selectedNodeId === node.id}
-          />
+          >
+            {isConnecting && (
+              <div className="absolute -right-2 -top-2 bg-primary text-primary-foreground rounded-full p-1">
+                <Plus className="h-3 w-3" />
+              </div>
+            )}
+          </Node>
         </div>
       ))}
+
+      {/* Instructions overlay */}
+      <div className="absolute bottom-4 right-4 bg-background/80 p-3 rounded-md shadow-sm border text-xs">
+        <p>
+          <strong>Tip:</strong> Hold Shift + Click on a node to create
+          connections
+        </p>
+      </div>
     </CanvasContainer>
   );
 };
