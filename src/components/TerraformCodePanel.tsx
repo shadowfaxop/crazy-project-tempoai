@@ -49,6 +49,12 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const handleGenerateCode = async () => {
     if (isGenerating) return;
 
+    // Check if there are connections between nodes
+    if (connections.length === 0 && nodes.length > 1) {
+      alert("Please connect your resources before generating Terraform code.");
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const result = await generateTerraformCode(nodes, connections);
@@ -129,32 +135,68 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   };
 
   const handleDownload = () => {
-    let fileName = "";
-    let content = "";
-    switch (activeTab) {
-      case "main":
-        fileName = "main.tf";
-        content = terraformCode.mainTf;
-        break;
-      case "variables":
-        fileName = "variables.tf";
-        content = terraformCode.variablesTf;
-        break;
-      case "outputs":
-        fileName = "outputs.tf";
-        content = terraformCode.outputsTf;
-        break;
-    }
+    // Create a zip file with all terraform files
+    import("jszip")
+      .then(async ({ default: JSZip }) => {
+        const zip = new JSZip();
+        const today = new Date().toISOString().split("T")[0];
+        const folderName = `terraform-modules-${today}`;
+        const folder = zip.folder(folderName);
 
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+        if (folder) {
+          // Add all terraform files to the zip
+          folder.file("main.tf", terraformCode.mainTf);
+          folder.file("variables.tf", terraformCode.variablesTf);
+          folder.file("outputs.tf", terraformCode.outputsTf);
+
+          // Generate the zip file
+          const content = await zip.generateAsync({ type: "blob" });
+
+          // Create download link
+          const url = URL.createObjectURL(content);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${folderName}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to create zip file:", err);
+        alert(
+          "Failed to create zip file. Downloading individual file instead.",
+        );
+
+        // Fallback to downloading individual file
+        let fileName = "";
+        let content = "";
+        switch (activeTab) {
+          case "main":
+            fileName = "main.tf";
+            content = terraformCode.mainTf;
+            break;
+          case "variables":
+            fileName = "variables.tf";
+            content = terraformCode.variablesTf;
+            break;
+          case "outputs":
+            fileName = "outputs.tf";
+            content = terraformCode.outputsTf;
+            break;
+        }
+
+        const blob = new Blob([content], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
   };
 
   return (
@@ -281,21 +323,21 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
               </TabsList>
             </div>
 
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 overflow-y-auto">
               <TabsContent value="main" className="p-4 mt-0">
-                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto h-[calc(100vh-300px)]">
                   {terraformCode.mainTf}
                 </pre>
               </TabsContent>
 
               <TabsContent value="variables" className="p-4 mt-0">
-                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto h-[calc(100vh-300px)]">
                   {terraformCode.variablesTf}
                 </pre>
               </TabsContent>
 
               <TabsContent value="outputs" className="p-4 mt-0">
-                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto h-[calc(100vh-300px)]">
                   {terraformCode.outputsTf}
                 </pre>
               </TabsContent>
