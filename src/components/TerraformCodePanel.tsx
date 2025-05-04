@@ -2,10 +2,12 @@ import React, { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, Download, RefreshCw, GitBranch, Check } from "lucide-react";
+import { Copy, Download, RefreshCw, GitBranch, Check, AlertCircle } from "lucide-react";
 import { generateTerraformCode } from "@/api/terraform-api";
 import { NodeItem, ConnectionItem } from "./Canvas";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import GitAuthModal from "./GitAuthModal";
+import { createBranch, commitAndPushFiles } from "@/lib/git-utils";
 
 interface TerraformCodePanelProps {
   nodes: NodeItem[];
@@ -32,6 +34,10 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   });
   const [branchCreated, setBranchCreated] = useState(false);
   const [branchName, setBranchName] = useState("terraform_modules");
+  const [showGitAuthModal, setShowGitAuthModal] = useState(false);
+  const [isGitConnected, setIsGitConnected] = useState(false);
+  const [gitError, setGitError] = useState<string | null>(null);
+  const [isCommitting, setIsCommitting] = useState(false);
 
   // Don't auto-generate Terraform code on load
   // Only generate when user explicitly requests it
@@ -44,15 +50,66 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       const result = await generateTerraformCode(nodes, connections);
       setTerraformCode(result);
       setIsCodeGenerated(true);
-
-      // Simulate branch creation
-      setTimeout(() => {
-        setBranchCreated(true);
-      }, 1000);
+      
+      // If Git is connected, prompt to commit
+      if (isGitConnected) {
+        await handleCommitToGit();
+      }
     } catch (error) {
       console.error("Error generating Terraform code:", error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+  
+  const handleGitSuccess = () => {
+    setIsGitConnected(true);
+    setGitError(null);
+  };
+  
+  const handleCommitToGit = async () => {
+    if (!isCodeGenerated || isCommitting) return;
+    
+    setIsCommitting(true);
+    setGitError(null);
+    
+    try {
+      // Create branch
+      const branchSuccess = await createBranch(branchName);
+      
+      if (!branchSuccess) {
+        setGitError("Failed to create or checkout branch");
+        return;
+      }
+      
+      // Current date for directory structure
+      const today = new Date().toISOString().split('T')[0];
+      const directory = `terraform/modules/${today}`;
+      
+      // Prepare files for commit
+      const files = [
+        { name: "main.tf", content: terraformCode.mainTf },
+        { name: "variables.tf", content: terraformCode.variablesTf },
+        { name: "outputs.tf", content: terraformCode.outputsTf },
+      ];
+      
+      // Commit and push
+      const commitSuccess = await commitAndPushFiles(
+        files,
+        `Add Terraform modules for infrastructure - ${today}`,
+        directory
+      );
+      
+      if (commitSuccess) {
+        setBranchCreated(true);
+      } else {
+        setGitError("Failed to commit and push files");
+      }
+    } catch (error) {
+      console.error("Error in Git operations:", error);
+      setGitError(`Git error: ${error.message || 'Unknown error'}`); 
+    } finally {
+      setIsCommitting(false);
     }
   };
 
@@ -112,7 +169,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  return (
+  const content = (
     <div className="h-full flex flex-col border rounded-md bg-background">
       <div className="p-4 border-b flex justify-between items-center">
         <h3 className="font-medium">Generated Terraform Code</h3>
@@ -146,6 +203,25 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
             <Download className="h-4 w-4 mr-1" />
             Download
           </Button>
+          <Button
+            size="sm"
+            variant={isGitConnected ? "default" : "outline"}
+            onClick={() => setShowGitAuthModal(true)}
+          >
+            <GitBranch className="h-4 w-4 mr-1" />
+            {isGitConnected ? "Connected" : "Connect Git"}
+          </Button>
+          {isGitConnected && isCodeGenerated && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCommitToGit}
+              disabled={isCommitting}
+            >
+              <GitBranch className={`h-4 w-4 mr-1 ${isCommitting ? "animate-spin" : ""}`} />
+              {isCommitting ? "Committing..." : "Commit to Git"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -155,8 +231,23 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
             <GitBranch className="h-4 w-4 text-green-500" />
             <Check className="h-4 w-4 text-green-500" />
             <AlertDescription>
-              Files created in{" "}
+              Files committed to{" "}
               <code className="bg-muted px-1 rounded">{branchName}</code> branch
+              in your Git repository at:
+              <code className="block mt-1 bg-muted p-1 rounded text-xs">
+                /terraform/modules/{new Date().toISOString().split("T")[0]}
+              </code>
+            </AlertDescription>
+          </div>
+        </Alert>
+      )}
+      
+      {gitError && (
+        <Alert className="m-4 bg-muted/50 border border-red-200">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <AlertDescription>
+              {gitError}
             </AlertDescription>
           </div>
         </Alert>
@@ -214,6 +305,21 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       )}
     </div>
   );
+};
+
+// Add GitAuthModal at the end of the component
+return (
+  <>
+    {showGitAuthModal && (
+      <GitAuthModal
+        open={showGitAuthModal}
+        onOpenChange={setShowGitAuthModal}
+        onSuccess={handleGitSuccess}
+      />
+    )}
+    {content}
+  </>
+);
 };
 
 export default TerraformCodePanel;
