@@ -2,13 +2,20 @@ import React, { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, Download, RefreshCw } from "lucide-react";
+import { Copy, Download, RefreshCw, GitBranch, Check } from "lucide-react";
 import { generateTerraformCode } from "@/api/terraform-api";
 import { NodeItem, ConnectionItem } from "./Canvas";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface TerraformCodePanelProps {
   nodes: NodeItem[];
   connections: ConnectionItem[];
+}
+
+interface TerraformFiles {
+  mainTf: string;
+  variablesTf: string;
+  outputsTf: string;
 }
 
 const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
@@ -17,20 +24,17 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState("main");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [terraformCode, setTerraformCode] = useState({
-    mainTf:
-      '# No resources defined yet\n\nprovider "aws" {\n  region = var.aws_region\n}',
-    variablesTf:
-      '# Variables\n\nvariable "aws_region" {\n  description = "AWS region"\n  type        = string\n  default     = "us-east-1"\n}',
-    outputsTf: "# No outputs defined yet",
+  const [isCodeGenerated, setIsCodeGenerated] = useState(false);
+  const [terraformCode, setTerraformCode] = useState<TerraformFiles>({
+    mainTf: "",
+    variablesTf: "",
+    outputsTf: "",
   });
+  const [branchCreated, setBranchCreated] = useState(false);
+  const [branchName, setBranchName] = useState("terraform_modules");
 
-  // Generate Terraform code when nodes or connections change
-  useEffect(() => {
-    if (nodes.length > 0) {
-      handleGenerateCode();
-    }
-  }, []);
+  // Don't auto-generate Terraform code on load
+  // Only generate when user explicitly requests it
 
   const handleGenerateCode = async () => {
     if (isGenerating) return;
@@ -39,6 +43,12 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
     try {
       const result = await generateTerraformCode(nodes, connections);
       setTerraformCode(result);
+      setIsCodeGenerated(true);
+
+      // Simulate branch creation
+      setTimeout(() => {
+        setBranchCreated(true);
+      }, 1000);
     } catch (error) {
       console.error("Error generating Terraform code:", error);
     } finally {
@@ -116,58 +126,92 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
             <RefreshCw
               className={`h-4 w-4 mr-1 ${isGenerating ? "animate-spin" : ""}`}
             />
-            {isGenerating ? "Generating..." : "Refresh"}
+            {isGenerating ? "Generating..." : "Generate Code"}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleCopyCode}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleCopyCode}
+            disabled={!isCodeGenerated}
+          >
             <Copy className="h-4 w-4 mr-1" />
             Copy
           </Button>
-          <Button size="sm" variant="outline" onClick={handleDownload}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDownload}
+            disabled={!isCodeGenerated}
+          >
             <Download className="h-4 w-4 mr-1" />
             Download
           </Button>
         </div>
       </div>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="flex-1 flex flex-col"
-      >
-        <div className="px-4 pt-2">
-          <TabsList className="w-full">
-            <TabsTrigger value="main" className="flex-1">
-              main.tf
-            </TabsTrigger>
-            <TabsTrigger value="variables" className="flex-1">
-              variables.tf
-            </TabsTrigger>
-            <TabsTrigger value="outputs" className="flex-1">
-              outputs.tf
-            </TabsTrigger>
-          </TabsList>
+      {branchCreated && (
+        <Alert className="m-4 bg-muted/50 border border-green-200">
+          <div className="flex items-center gap-2">
+            <GitBranch className="h-4 w-4 text-green-500" />
+            <Check className="h-4 w-4 text-green-500" />
+            <AlertDescription>
+              Files created in{" "}
+              <code className="bg-muted px-1 rounded">{branchName}</code> branch
+            </AlertDescription>
+          </div>
+        </Alert>
+      )}
+
+      {!isCodeGenerated ? (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <p>Click "Generate Code" to create Terraform files</p>
+            <p className="text-sm mt-2">
+              Files will be created in a separate branch
+            </p>
+          </div>
         </div>
+      ) : (
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex-1 flex flex-col"
+        >
+          <div className="px-4 pt-2">
+            <TabsList className="w-full">
+              <TabsTrigger value="main" className="flex-1">
+                main.tf
+              </TabsTrigger>
+              <TabsTrigger value="variables" className="flex-1">
+                variables.tf
+              </TabsTrigger>
+              <TabsTrigger value="outputs" className="flex-1">
+                outputs.tf
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        <ScrollArea className="flex-1">
-          <TabsContent value="main" className="p-4 mt-0">
-            <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-              {terraformCode.mainTf}
-            </pre>
-          </TabsContent>
+          <ScrollArea className="flex-1">
+            <TabsContent value="main" className="p-4 mt-0">
+              <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                {terraformCode.mainTf}
+              </pre>
+            </TabsContent>
 
-          <TabsContent value="variables" className="p-4 mt-0">
-            <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-              {terraformCode.variablesTf}
-            </pre>
-          </TabsContent>
+            <TabsContent value="variables" className="p-4 mt-0">
+              <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                {terraformCode.variablesTf}
+              </pre>
+            </TabsContent>
 
-          <TabsContent value="outputs" className="p-4 mt-0">
-            <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-              {terraformCode.outputsTf}
-            </pre>
-          </TabsContent>
-        </ScrollArea>
-      </Tabs>
+            <TabsContent value="outputs" className="p-4 mt-0">
+              <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                {terraformCode.outputsTf}
+              </pre>
+            </TabsContent>
+          </ScrollArea>
+        </Tabs>
+      )}
     </div>
   );
 };

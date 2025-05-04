@@ -85,7 +85,12 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
   const handleApplyChanges = () => {
     if (selectedNode) {
-      onNodeUpdate(selectedNode.id, { config: formValues });
+      // Update both the config and title if name is provided
+      const updates: Partial<NodeItem> = { config: formValues };
+      if (formValues.name) {
+        updates.title = formValues.name;
+      }
+      onNodeUpdate(selectedNode.id, updates);
     } else if (selectedConnection) {
       onConnectionUpdate(selectedConnection.id, {
         type: formValues.type,
@@ -116,14 +121,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
     return (
       <div className="space-y-6">
-        <div className="flex space-x-2 overflow-x-auto pb-2">
+        <div className="flex space-x-2 overflow-x-auto pb-2 flex-wrap">
           {categories.map((category) => (
             <Button
               key={category}
               variant={currentCategory === category ? "default" : "outline"}
               size="sm"
               onClick={() => setActiveCategory(category)}
-              className="whitespace-nowrap"
+              className="whitespace-nowrap mb-2"
             >
               {category}
             </Button>
@@ -143,7 +148,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           >
             Delete
           </Button>
-          <Button onClick={handleApplyChanges}>Apply Changes</Button>
+          <Button onClick={handleApplyChanges}>Save</Button>
         </div>
       </div>
     );
@@ -244,7 +249,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         return (
           <div
             key={field.name}
-            className="flex items-center justify-between space-y-0"
+            className="flex items-center justify-between space-y-0 mb-4"
           >
             <Label htmlFor={field.name}>
               {field.label}
@@ -361,7 +366,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
           >
             Delete
           </Button>
-          <Button onClick={handleApplyChanges}>Apply Changes</Button>
+          <Button onClick={handleApplyChanges}>Save</Button>
         </div>
       </div>
     );

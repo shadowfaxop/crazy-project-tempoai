@@ -12,6 +12,7 @@ export interface NodeItem {
   y: number;
   title: string;
   config: Record<string, any>;
+  dependsOn?: string[];
 }
 
 export interface ConnectionItem {
@@ -188,6 +189,18 @@ const Canvas: React.FC<CanvasProps> = ({
           type: "default",
         };
 
+        // Update the target node's dependsOn array to include the source node
+        const updatedNodes = nodes.map((node) => {
+          if (node.id === targetNode.id) {
+            const dependsOn = node.dependsOn || [];
+            if (!dependsOn.includes(connectionStart.id)) {
+              return { ...node, dependsOn: [...dependsOn, connectionStart.id] };
+            }
+          }
+          return node;
+        });
+
+        onNodesChange(updatedNodes);
         onConnectionsChange([...connections, newConnection]);
         onSelectConnection(newConnection.id);
       }
