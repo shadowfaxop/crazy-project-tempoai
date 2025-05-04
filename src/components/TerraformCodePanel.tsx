@@ -1,8 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, Download, RefreshCw, GitBranch, Check, AlertCircle } from "lucide-react";
+import {
+  Copy,
+  Download,
+  RefreshCw,
+  GitBranch,
+  Check,
+  AlertCircle,
+} from "lucide-react";
 import { generateTerraformCode } from "@/api/terraform-api";
 import { NodeItem, ConnectionItem } from "./Canvas";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,9 +46,6 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const [gitError, setGitError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
 
-  // Don't auto-generate Terraform code on load
-  // Only generate when user explicitly requests it
-
   const handleGenerateCode = async () => {
     if (isGenerating) return;
 
@@ -50,8 +54,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       const result = await generateTerraformCode(nodes, connections);
       setTerraformCode(result);
       setIsCodeGenerated(true);
-      
-      // If Git is connected, prompt to commit
+
       if (isGitConnected) {
         await handleCommitToGit();
       }
@@ -61,45 +64,41 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       setIsGenerating(false);
     }
   };
-  
+
   const handleGitSuccess = () => {
     setIsGitConnected(true);
     setGitError(null);
   };
-  
+
   const handleCommitToGit = async () => {
     if (!isCodeGenerated || isCommitting) return;
-    
+
     setIsCommitting(true);
     setGitError(null);
-    
+
     try {
-      // Create branch
       const branchSuccess = await createBranch(branchName);
-      
+
       if (!branchSuccess) {
         setGitError("Failed to create or checkout branch");
         return;
       }
-      
-      // Current date for directory structure
-      const today = new Date().toISOString().split('T')[0];
+
+      const today = new Date().toISOString().split("T")[0];
       const directory = `terraform/modules/${today}`;
-      
-      // Prepare files for commit
+
       const files = [
         { name: "main.tf", content: terraformCode.mainTf },
         { name: "variables.tf", content: terraformCode.variablesTf },
         { name: "outputs.tf", content: terraformCode.outputsTf },
       ];
-      
-      // Commit and push
+
       const commitSuccess = await commitAndPushFiles(
         files,
         `Add Terraform modules for infrastructure - ${today}`,
-        directory
+        directory,
       );
-      
+
       if (commitSuccess) {
         setBranchCreated(true);
       } else {
@@ -107,7 +106,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       }
     } catch (error) {
       console.error("Error in Git operations:", error);
-      setGitError(`Git error: ${error.message || 'Unknown error'}`); 
+      setGitError(`Git error: ${error.message || "Unknown error"}`);
     } finally {
       setIsCommitting(false);
     }
@@ -115,7 +114,6 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
 
   const handleCopyCode = () => {
     let codeToCopy = "";
-
     switch (activeTab) {
       case "main":
         codeToCopy = terraformCode.mainTf;
@@ -127,22 +125,12 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
         codeToCopy = terraformCode.outputsTf;
         break;
     }
-
     navigator.clipboard.writeText(codeToCopy);
   };
 
   const handleDownload = () => {
-    const files = [
-      { name: "main.tf", content: terraformCode.mainTf },
-      { name: "variables.tf", content: terraformCode.variablesTf },
-      { name: "outputs.tf", content: terraformCode.outputsTf },
-    ];
-
-    // Create a zip file using JSZip (in a real app)
-    // For now, just download the current file
     let fileName = "";
     let content = "";
-
     switch (activeTab) {
       case "main":
         fileName = "main.tf";
@@ -169,157 +157,154 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const content = (
-    <div className="h-full flex flex-col border rounded-md bg-background">
-      <div className="p-4 border-b flex justify-between items-center">
-        <h3 className="font-medium">Generated Terraform Code</h3>
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleGenerateCode}
-            disabled={isGenerating}
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-1 ${isGenerating ? "animate-spin" : ""}`}
-            />
-            {isGenerating ? "Generating..." : "Generate Code"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopyCode}
-            disabled={!isCodeGenerated}
-          >
-            <Copy className="h-4 w-4 mr-1" />
-            Copy
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleDownload}
-            disabled={!isCodeGenerated}
-          >
-            <Download className="h-4 w-4 mr-1" />
-            Download
-          </Button>
-          <Button
-            size="sm"
-            variant={isGitConnected ? "default" : "outline"}
-            onClick={() => setShowGitAuthModal(true)}
-          >
-            <GitBranch className="h-4 w-4 mr-1" />
-            {isGitConnected ? "Connected" : "Connect Git"}
-          </Button>
-          {isGitConnected && isCodeGenerated && (
+  return (
+    <>
+      {showGitAuthModal && (
+        <GitAuthModal
+          open={showGitAuthModal}
+          onOpenChange={setShowGitAuthModal}
+          onSuccess={handleGitSuccess}
+        />
+      )}
+
+      <div className="h-full flex flex-col border rounded-md bg-background">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="font-medium">Generated Terraform Code</h3>
+          <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={handleCommitToGit}
-              disabled={isCommitting}
+              onClick={handleGenerateCode}
+              disabled={isGenerating}
             >
-              <GitBranch className={`h-4 w-4 mr-1 ${isCommitting ? "animate-spin" : ""}`} />
-              {isCommitting ? "Committing..." : "Commit to Git"}
+              <RefreshCw
+                className={`h-4 w-4 mr-1 ${isGenerating ? "animate-spin" : ""}`}
+              />
+              {isGenerating ? "Generating..." : "Generate Code"}
             </Button>
-          )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCopyCode}
+              disabled={!isCodeGenerated}
+            >
+              <Copy className="h-4 w-4 mr-1" />
+              Copy
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDownload}
+              disabled={!isCodeGenerated}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Download
+            </Button>
+            <Button
+              size="sm"
+              variant={isGitConnected ? "default" : "outline"}
+              onClick={() => setShowGitAuthModal(true)}
+            >
+              <GitBranch className="h-4 w-4 mr-1" />
+              {isGitConnected ? "Connected" : "Connect Git"}
+            </Button>
+            {isGitConnected && isCodeGenerated && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCommitToGit}
+                disabled={isCommitting}
+              >
+                <GitBranch
+                  className={`h-4 w-4 mr-1 ${
+                    isCommitting ? "animate-spin" : ""
+                  }`}
+                />
+                {isCommitting ? "Committing..." : "Commit to Git"}
+              </Button>
+            )}
+          </div>
         </div>
+
+        {branchCreated && (
+          <Alert className="m-4 bg-muted/50 border border-green-200">
+            <div className="flex items-center gap-2">
+              <GitBranch className="h-4 w-4 text-green-500" />
+              <Check className="h-4 w-4 text-green-500" />
+              <AlertDescription>
+                Files committed to{" "}
+                <code className="bg-muted px-1 rounded">{branchName}</code>{" "}
+                branch in your Git repository at:
+                <code className="block mt-1 bg-muted p-1 rounded text-xs">
+                  /terraform/modules/{new Date().toISOString().split("T")[0]}
+                </code>
+              </AlertDescription>
+            </div>
+          </Alert>
+        )}
+
+        {gitError && (
+          <Alert className="m-4 bg-muted/50 border border-red-200">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertDescription>{gitError}</AlertDescription>
+            </div>
+          </Alert>
+        )}
+
+        {!isCodeGenerated ? (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <div className="text-center">
+              <p>Click "Generate Code" to create Terraform files</p>
+              <p className="text-sm mt-2">
+                Files will be created in a separate branch
+              </p>
+            </div>
+          </div>
+        ) : (
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="flex-1 flex flex-col"
+          >
+            <div className="px-4 pt-2">
+              <TabsList className="w-full">
+                <TabsTrigger value="main" className="flex-1">
+                  main.tf
+                </TabsTrigger>
+                <TabsTrigger value="variables" className="flex-1">
+                  variables.tf
+                </TabsTrigger>
+                <TabsTrigger value="outputs" className="flex-1">
+                  outputs.tf
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <ScrollArea className="flex-1">
+              <TabsContent value="main" className="p-4 mt-0">
+                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                  {terraformCode.mainTf}
+                </pre>
+              </TabsContent>
+
+              <TabsContent value="variables" className="p-4 mt-0">
+                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                  {terraformCode.variablesTf}
+                </pre>
+              </TabsContent>
+
+              <TabsContent value="outputs" className="p-4 mt-0">
+                <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
+                  {terraformCode.outputsTf}
+                </pre>
+              </TabsContent>
+            </ScrollArea>
+          </Tabs>
+        )}
       </div>
-
-      {branchCreated && (
-        <Alert className="m-4 bg-muted/50 border border-green-200">
-          <div className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4 text-green-500" />
-            <Check className="h-4 w-4 text-green-500" />
-            <AlertDescription>
-              Files committed to{" "}
-              <code className="bg-muted px-1 rounded">{branchName}</code> branch
-              in your Git repository at:
-              <code className="block mt-1 bg-muted p-1 rounded text-xs">
-                /terraform/modules/{new Date().toISOString().split("T")[0]}
-              </code>
-            </AlertDescription>
-          </div>
-        </Alert>
-      )}
-      
-      {gitError && (
-        <Alert className="m-4 bg-muted/50 border border-red-200">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-500" />
-            <AlertDescription>
-              {gitError}
-            </AlertDescription>
-          </div>
-        </Alert>
-      )}
-
-      {!isCodeGenerated ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          <div className="text-center">
-            <p>Click "Generate Code" to create Terraform files</p>
-            <p className="text-sm mt-2">
-              Files will be created in a separate branch
-            </p>
-          </div>
-        </div>
-      ) : (
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="flex-1 flex flex-col"
-        >
-          <div className="px-4 pt-2">
-            <TabsList className="w-full">
-              <TabsTrigger value="main" className="flex-1">
-                main.tf
-              </TabsTrigger>
-              <TabsTrigger value="variables" className="flex-1">
-                variables.tf
-              </TabsTrigger>
-              <TabsTrigger value="outputs" className="flex-1">
-                outputs.tf
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <ScrollArea className="flex-1">
-            <TabsContent value="main" className="p-4 mt-0">
-              <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-                {terraformCode.mainTf}
-              </pre>
-            </TabsContent>
-
-            <TabsContent value="variables" className="p-4 mt-0">
-              <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-                {terraformCode.variablesTf}
-              </pre>
-            </TabsContent>
-
-            <TabsContent value="outputs" className="p-4 mt-0">
-              <pre className="text-sm font-mono bg-muted p-4 rounded-md overflow-x-auto">
-                {terraformCode.outputsTf}
-              </pre>
-            </TabsContent>
-          </ScrollArea>
-        </Tabs>
-      )}
-    </div>
+    </>
   );
-};
-
-// Add GitAuthModal at the end of the component
-return (
-  <>
-    {showGitAuthModal && (
-      <GitAuthModal
-        open={showGitAuthModal}
-        onOpenChange={setShowGitAuthModal}
-        onSuccess={handleGitSuccess}
-      />
-    )}
-    {content}
-  </>
-);
 };
 
 export default TerraformCodePanel;
