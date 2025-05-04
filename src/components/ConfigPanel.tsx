@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useConfigContext } from "./ConfigContext";
+import { AWS_REGIONS } from "@/lib/aws-regions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -50,6 +52,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   const [activeTab, setActiveTab] = useState("properties");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, any>>({});
+  const {
+    subnets,
+    securityGroups,
+    selectedRegion,
+    setSelectedRegion,
+    availabilityZones,
+  } = useConfigContext();
 
   // Get the selected node or connection
   const selectedNode = selectedNodeId
@@ -160,165 +169,39 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         ? formValues[field.name]
         : field.default;
 
-    switch (field.type) {
-      case "text":
-        return (
-          <div key={field.name} className="space-y-2">
-            <Label htmlFor={field.name}>
-              {field.label}
-              {field.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </Label>
-            <Input
-              id={field.name}
-              value={value || ""}
-              onChange={(e) => handleInputChange(field.name, e.target.value)}
-              placeholder={field.placeholder}
-            />
-            {field.description && (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            )}
-          </div>
-        );
+    // Handle dynamic options for specific fields
+    let options = field.options || [];
 
-      case "number":
-        return (
-          <div key={field.name} className="space-y-2">
-            <Label htmlFor={field.name}>
-              {field.label}
-              {field.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </Label>
-            <Input
-              id={field.name}
-              type="number"
-              value={value || ""}
-              onChange={(e) =>
-                handleInputChange(field.name, Number(e.target.value))
-              }
-              min={field.min}
-              max={field.max}
-            />
-            {field.description && (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            )}
-          </div>
-        );
+    // Add region selector at the top of the form if this is a node configuration
+    if (selectedNode && field.name === "name" && activeCategory === "General") {
+      // This is a hack to add region selector at the top
+      setTimeout(() => {
+        const regionSelector = document.getElementById("region-selector");
+        if (!regionSelector) {
+          const container = document.createElement("div");
+          container.id = "region-selector";
+          container.className = "space-y-2 mb-4";
+          container.innerHTML = `
+            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">AWS Region</label>
+            <select class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+              ${AWS_REGIONS.map((region) => `<option value="${region.value}"${region.value === selectedRegion ? " selected" : ""}>${region.label}</option>`).join("")}
+            </select>
+          `;
 
-      case "select":
-        return (
-          <div key={field.name} className="space-y-2">
-            <Label htmlFor={field.name}>
-              {field.label}
-              {field.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </Label>
-            <Select
-              value={value || ""}
-              onValueChange={(val) => handleInputChange(field.name, val)}
-            >
-              <SelectTrigger id={field.name}>
-                <SelectValue
-                  placeholder={`Select ${field.label.toLowerCase()}`}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {field.options?.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {field.description && (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            )}
-          </div>
-        );
+          const firstField = document.querySelector(".space-y-4");
+          if (firstField) {
+            firstField.parentNode.insertBefore(container, firstField);
 
-      case "boolean":
-        return (
-          <div
-            key={field.name}
-            className="flex items-center justify-between space-y-0 mb-4"
-          >
-            <Label htmlFor={field.name}>
-              {field.label}
-              {field.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </Label>
-            <Switch
-              id={field.name}
-              checked={!!value}
-              onCheckedChange={(checked) =>
-                handleInputChange(field.name, checked)
-              }
-            />
-            {field.description && (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            )}
-          </div>
-        );
-
-      case "tags":
-        return (
-          <div key={field.name} className="space-y-2">
-            <Label htmlFor={field.name}>
-              {field.label}
-              {field.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </Label>
-            <TagInput
-              value={value || {}}
-              onChange={(tags) => handleInputChange(field.name, tags)}
-              placeholder={field.placeholder}
-            />
-            {field.description && (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            )}
-          </div>
-        );
-
-      case "multiselect":
-        return (
-          <div key={field.name} className="space-y-2">
-            <Label htmlFor={field.name}>
-              {field.label}
-              {field.required && (
-                <span className="text-destructive ml-1">*</span>
-              )}
-            </Label>
-            <MultiSelect
-              options={field.options || []}
-              selected={value || []}
-              onChange={(selected) => handleInputChange(field.name, selected)}
-              placeholder={`Select ${field.label.toLowerCase()}`}
-            />
-            {field.description && (
-              <p className="text-xs text-muted-foreground">
-                {field.description}
-              </p>
-            )}
-          </div>
-        );
-
-      default:
-        return null;
+            // Add event listener
+            const select = container.querySelector("select");
+            if (select) {
+              select.addEventListener("change", (e) => {
+                setSelectedRegion((e.target as HTMLSelectElement).value);
+              });
+            }
+          }
+        }
+      }, 0);
     }
   };
 

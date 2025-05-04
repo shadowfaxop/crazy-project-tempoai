@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ServiceCard } from "@/components/ui/service-card";
@@ -13,24 +13,38 @@ import {
   Box,
   Cloud,
   Globe,
+  Network,
+  Shield,
+  FileText,
 } from "lucide-react";
+import { ServiceType } from "@/lib/aws-service-configs";
 
 interface SidebarProps {
-  onDragStart: (event: React.DragEvent, serviceType: string) => void;
+  onDragStart: (event: React.DragEvent, serviceType: ServiceType) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onDragStart = () => {} }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+
   return (
-    <div className="w-64 h-full border-r bg-background flex flex-col">
+    <div className="w-64 h-full border-r bg-background flex flex-col overflow-hidden">
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">AWS Services</h2>
         <div className="mt-2 relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search services..." className="pl-8" />
+          <Input
+            placeholder="Search services..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
-      <Tabs defaultValue="compute" className="flex-1">
+      <Tabs
+        defaultValue="compute"
+        className="flex-1 flex flex-col overflow-hidden"
+      >
         <div className="px-4 pt-4">
           <TabsList className="w-full">
             <TabsTrigger value="compute" className="flex-1">
@@ -41,6 +55,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onDragStart = () => {} }) => {
             </TabsTrigger>
             <TabsTrigger value="database" className="flex-1">
               Database
+            </TabsTrigger>
+            <TabsTrigger value="network" className="flex-1">
+              Network
             </TabsTrigger>
           </TabsList>
         </div>
@@ -103,13 +120,41 @@ const Sidebar: React.FC<SidebarProps> = ({ onDragStart = () => {} }) => {
               onDragStart={(e) => onDragStart(e, "dynamodb")}
             />
           </TabsContent>
+
+          <TabsContent value="network" className="mt-0 space-y-4">
+            <ServiceCard
+              title="Subnet"
+              icon={<Network className="h-5 w-5" />}
+              description="A subnet in a VPC"
+              draggable
+              onDragStart={(e) => onDragStart(e, "subnet")}
+            />
+            <ServiceCard
+              title="Security Group"
+              icon={<Shield className="h-5 w-5" />}
+              description="Firewall rules for your resources"
+              draggable
+              onDragStart={(e) => onDragStart(e, "securitygroup")}
+            />
+            <ServiceCard
+              title="CloudFront Distribution"
+              icon={<Globe className="h-5 w-5" />}
+              description="Content delivery network"
+              draggable
+              onDragStart={(e) => onDragStart(e, "cdn")}
+            />
+            <ServiceCard
+              title="CloudWatch Logs"
+              icon={<FileText className="h-5 w-5" />}
+              description="Log storage and monitoring"
+              draggable
+              onDragStart={(e) => onDragStart(e, "cloudwatchlogs")}
+            />
+          </TabsContent>
         </ScrollArea>
       </Tabs>
 
       <div className="p-4 border-t">
-        <Button variant="outline" className="w-full mb-2">
-          Save Project
-        </Button>
         <Button className="w-full">Generate Terraform</Button>
       </div>
     </div>

@@ -18,40 +18,48 @@ export async function initGit(
     }
 
     // Build authenticated remote URL with proper token format
+    // Ensure special characters in username and token are properly encoded
+    const encodedToken = encodeURIComponent(token);
     remoteUrlWithAuth = repoUrl.replace(
       "https://",
-      `https://${username}:${token}@`,
+      `https://${username}:${encodedToken}@`,
     );
 
-    // Initialize git client
-    git = simpleGit();
+    // Initialize git client with increased timeout
+    git = simpleGit({ timeout: 30000 });
 
     // Check if repo directory exists and is a git repo
     try {
       await fs.access("repo");
-      git = simpleGit("repo");
+      git = simpleGit("repo", { timeout: 30000 });
       const isRepo = await git.checkIsRepo();
 
       if (!isRepo) {
         // Remove directory if it exists but is not a git repo
         await fs.rm("repo", { recursive: true, force: true });
-        git = simpleGit();
+        git = simpleGit({ timeout: 30000 });
+        console.log("Cloning repository...");
         await git.clone(remoteUrlWithAuth, "repo");
-        git = simpleGit("repo");
+        git = simpleGit("repo", { timeout: 30000 });
       } else {
         // If it's a repo, update remote URL with auth
         await git.remote(["set-url", "origin", remoteUrlWithAuth]);
+        console.log("Fetching from remote...");
         await git.fetch();
       }
     } catch (err) {
       // Directory doesn't exist, clone fresh
+      console.log("Cloning fresh repository...");
       await git.clone(remoteUrlWithAuth, "repo");
-      git = simpleGit("repo");
+      git = simpleGit("repo", { timeout: 30000 });
     }
 
     // Set Git config (required by GitHub)
     await git.addConfig("user.name", username);
     await git.addConfig("user.email", `${username}@users.noreply.github.com`);
+
+    // Test connection with a simple git operation
+    await git.fetch(["--depth=1"]);
 
     console.log("✅ Git repository initialized successfully");
     return true;

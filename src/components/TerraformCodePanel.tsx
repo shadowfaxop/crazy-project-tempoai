@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import ValidationAlertDialog from "./ValidationAlertDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -45,14 +46,69 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const [isGitConnected, setIsGitConnected] = useState(false);
   const [gitError, setGitError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [showValidationAlert, setShowValidationAlert] = useState(false);
+  const [validationMessage, setValidationMessage] = useState("");
 
   const handleGenerateCode = async () => {
     if (isGenerating) return;
 
     // Check if there are connections between nodes
     if (connections.length === 0 && nodes.length > 1) {
-      alert("Please connect your resources before generating Terraform code.");
+      setValidationMessage(
+        "Please connect your resources before generating Terraform code.",
+      );
+      setShowValidationAlert(true);
       return;
+    }
+
+    // Check if all nodes are connected
+    if (nodes.length > 1) {
+      const connectedNodeIds = new Set<string>();
+
+      // Add all nodes that are part of connections
+      connections.forEach((conn) => {
+        connectedNodeIds.add(conn.sourceId);
+        connectedNodeIds.add(conn.targetId);
+      });
+
+      // Check if any node is not connected
+      const unconnectedNodes = nodes.filter(
+        (node) => !connectedNodeIds.has(node.id),
+      );
+
+      if (unconnectedNodes.length > 0) {
+        const nodeNames = unconnectedNodes.map((n) => n.title).join(", ");
+        setValidationMessage(
+          `All resources must be connected. Unconnected resources: ${nodeNames}`,
+        );
+        setShowValidationAlert(true);
+        return;
+      }
+    }
+
+    // Check if all nodes are connected
+    if (nodes.length > 1) {
+      const connectedNodeIds = new Set<string>();
+
+      // Add all nodes that are part of connections
+      connections.forEach((conn) => {
+        connectedNodeIds.add(conn.sourceId);
+        connectedNodeIds.add(conn.targetId);
+      });
+
+      // Check if any node is not connected
+      const unconnectedNodes = nodes.filter(
+        (node) => !connectedNodeIds.has(node.id),
+      );
+
+      if (unconnectedNodes.length > 0) {
+        const nodeNames = unconnectedNodes.map((n) => n.title).join(", ");
+        setValidationMessage(
+          `All resources must be connected. Unconnected resources: ${nodeNames}`,
+        );
+        setShowValidationAlert(true);
+        return;
+      }
     }
 
     setIsGenerating(true);
@@ -208,6 +264,14 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
           onSuccess={handleGitSuccess}
         />
       )}
+
+      <ValidationAlertDialog
+        open={showValidationAlert}
+        onOpenChange={setShowValidationAlert}
+        title="Validation Error"
+        description={validationMessage}
+        actionLabel="OK"
+      />
 
       <div className="h-full flex flex-col border rounded-md bg-background">
         <div className="p-4 border-b flex justify-between items-center">
