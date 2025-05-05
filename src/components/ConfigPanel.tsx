@@ -203,6 +203,140 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         }
       }, 0);
     }
+
+    // Dynamically update options for availability zone based on selected region
+    if (field.name === "availability_zone") {
+      options = availabilityZones.map((az) => ({ value: az, label: az }));
+    }
+
+    // Render different input types based on field type
+    switch (field.type) {
+      case "text":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <Input
+              id={field.name}
+              value={value || ""}
+              onChange={(e) => handleInputChange(field.name, e.target.value)}
+              placeholder={field.placeholder}
+            />
+            {field.description && (
+              <p className="text-xs text-muted-foreground">
+                {field.description}
+              </p>
+            )}
+          </div>
+        );
+
+      case "number":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <Input
+              id={field.name}
+              type="number"
+              value={value || ""}
+              onChange={(e) =>
+                handleInputChange(field.name, parseInt(e.target.value, 10))
+              }
+              min={field.min}
+              max={field.max}
+            />
+          </div>
+        );
+
+      case "select":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <Select
+              value={value || ""}
+              onValueChange={(val) => handleInputChange(field.name, val)}
+            >
+              <SelectTrigger id={field.name}>
+                <SelectValue
+                  placeholder={`Select ${field.label.toLowerCase()}`}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+
+      case "boolean":
+        return (
+          <div
+            key={field.name}
+            className="flex items-center justify-between space-y-0 py-2"
+          >
+            <Label htmlFor={field.name}>{field.label}</Label>
+            <Switch
+              id={field.name}
+              checked={!!value}
+              onCheckedChange={(checked) =>
+                handleInputChange(field.name, checked)
+              }
+            />
+          </div>
+        );
+
+      case "tags":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <TagInput
+              id={field.name}
+              placeholder={field.placeholder || "Add tag..."}
+              tags={value || {}}
+              onTagsChange={(tags) => handleInputChange(field.name, tags)}
+            />
+            {field.description && (
+              <p className="text-xs text-muted-foreground">
+                {field.description}
+              </p>
+            )}
+          </div>
+        );
+
+      case "multiselect":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <MultiSelect
+              id={field.name}
+              options={options}
+              selected={value || []}
+              onChange={(selected) => handleInputChange(field.name, selected)}
+              placeholder={`Select ${field.label.toLowerCase()}`}
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
   const renderConnectionConfig = () => {
