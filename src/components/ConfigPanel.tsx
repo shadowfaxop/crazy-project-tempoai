@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { TagInput } from "@/components/ui/tag-input";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Globe } from "lucide-react";
 import {
   SERVICE_CONFIGS,
   ServiceType,
@@ -172,35 +173,10 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     // Handle dynamic options for specific fields
     let options = field.options || [];
 
-    // Add region selector at the top of the form if this is a node configuration
-    if (selectedNode && field.name === "name" && activeCategory === "General") {
-      // This is a hack to add region selector at the top
+    // For region fields, use the global selected region as default
+    if (field.name === "region" && !formValues[field.name]) {
       setTimeout(() => {
-        const regionSelector = document.getElementById("region-selector");
-        if (!regionSelector) {
-          const container = document.createElement("div");
-          container.id = "region-selector";
-          container.className = "space-y-2 mb-4";
-          container.innerHTML = `
-            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">AWS Region</label>
-            <select class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-              ${AWS_REGIONS.map((region) => `<option value="${region.value}"${region.value === selectedRegion ? " selected" : ""}>${region.label}</option>`).join("")}
-            </select>
-          `;
-
-          const firstField = document.querySelector(".space-y-4");
-          if (firstField) {
-            firstField.parentNode.insertBefore(container, firstField);
-
-            // Add event listener
-            const select = container.querySelector("select");
-            if (select) {
-              select.addEventListener("change", (e) => {
-                setSelectedRegion((e.target as HTMLSelectElement).value);
-              });
-            }
-          }
-        }
+        handleInputChange(field.name, selectedRegion);
       }, 0);
     }
 
@@ -471,7 +447,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   };
 
   return (
-    <div className="w-80 h-full border-l bg-background flex flex-col">
+    <div className="w-full h-full border-l bg-background flex flex-col">
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">
           {selectedNode
@@ -480,6 +456,33 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
               ? "Connection Configuration"
               : "Configuration"}
         </h2>
+
+        {/* Global AWS Region Selector */}
+        <div className="mt-4">
+          <Label htmlFor="global-region" className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            <span>Default AWS Region</span>
+          </Label>
+          <Select
+            value={selectedRegion}
+            onValueChange={(value) => setSelectedRegion(value)}
+          >
+            <SelectTrigger id="global-region" className="mt-1">
+              <SelectValue placeholder="Select AWS region" />
+            </SelectTrigger>
+            <SelectContent>
+              {AWS_REGIONS.map((region) => (
+                <SelectItem key={region.value} value={region.value}>
+                  {region.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            This region will be used as the default for all services
+          </p>
+        </div>
+        <Separator className="my-4" />
       </div>
 
       {selectedNode || selectedConnection ? (

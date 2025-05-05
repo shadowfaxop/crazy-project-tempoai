@@ -11,8 +11,10 @@ const basename = import.meta.env.BASE_URL;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter basename={basename} className="w-px">
-      <App />
+    <BrowserRouter basename={basename}>
+      <div className="w-full h-full">
+        <App />
+      </div>
     </BrowserRouter>
   </React.StrictMode>,
 );

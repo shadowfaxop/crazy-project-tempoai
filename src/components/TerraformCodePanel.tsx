@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ValidationAlertDialog from "./ValidationAlertDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +16,7 @@ import { NodeItem, ConnectionItem } from "./Canvas";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import GitAuthModal from "./GitAuthModal";
 import { createBranch, commitAndPushFiles } from "@/lib/git-utils";
+import { useConfigContext } from "./ConfigContext";
 
 interface TerraformCodePanelProps {
   nodes: NodeItem[];
@@ -32,6 +33,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   nodes,
   connections,
 }) => {
+  const { selectedRegion } = useConfigContext();
   const [activeTab, setActiveTab] = useState("main");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCodeGenerated, setIsCodeGenerated] = useState(false);
@@ -49,6 +51,14 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
 
+  // Check if Git is already connected on component mount
+  useEffect(() => {
+    const gitConnected = localStorage.getItem("aws-infra-git-connected");
+    if (gitConnected === "true") {
+      setIsGitConnected(true);
+    }
+  }, []);
+
   const handleGenerateCode = async () => {
     if (isGenerating) return;
 
@@ -59,31 +69,6 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       );
       setShowValidationAlert(true);
       return;
-    }
-
-    // Check if all nodes are connected
-    if (nodes.length > 1) {
-      const connectedNodeIds = new Set<string>();
-
-      // Add all nodes that are part of connections
-      connections.forEach((conn) => {
-        connectedNodeIds.add(conn.sourceId);
-        connectedNodeIds.add(conn.targetId);
-      });
-
-      // Check if any node is not connected
-      const unconnectedNodes = nodes.filter(
-        (node) => !connectedNodeIds.has(node.id),
-      );
-
-      if (unconnectedNodes.length > 0) {
-        const nodeNames = unconnectedNodes.map((n) => n.title).join(", ");
-        setValidationMessage(
-          `All resources must be connected. Unconnected resources: ${nodeNames}`,
-        );
-        setShowValidationAlert(true);
-        return;
-      }
     }
 
     // Check if all nodes are connected
@@ -130,6 +115,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const handleGitSuccess = () => {
     setIsGitConnected(true);
     setGitError(null);
+    localStorage.setItem("aws-infra-git-connected", "true");
   };
 
   const handleCommitToGit = async () => {
@@ -147,17 +133,19 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       }
 
       const today = new Date().toISOString().split("T")[0];
-      const directory = `terraform/modules/${today}`;
+      const directory = `terraform/modules/${selectedRegion}/${today}`;
 
       const files = [
         { name: "main.tf", content: terraformCode.mainTf },
         { name: "variables.tf", content: terraformCode.variablesTf },
         { name: "outputs.tf", content: terraformCode.outputsTf },
+        // Add a README with information about the infrastructure
+        { name: "README.md", content: generateReadme() },
       ];
 
       const commitSuccess = await commitAndPushFiles(
         files,
-        `Add Terraform modules for infrastructure - ${today}`,
+        `Add Terraform modules for ${selectedRegion} infrastructure - ${today}`,
         directory,
       );
 
@@ -172,6 +160,33 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
     } finally {
       setIsCommitting(false);
     }
+  };
+
+  const generateReadme = () => {
+    return `# AWS Infrastructure as Code
+
+## Region: ${selectedRegion}
+
+This directory contains Terraform code for deploying AWS infrastructure.
+
+## Resources
+
+${nodes
+  .map(
+    (node) =>
+      `- **${node.title}** (${node.type}): ${node.config?.name || node.id}`,
+  )
+  .join("\n")}
+
+## Deployment Instructions
+
+1. Install Terraform
+2. Run \`terraform init\`
+3. Run \`terraform plan\` to preview changes
+4. Run \`terraform apply\` to deploy the infrastructure
+
+## Generated on: ${new Date().toISOString()}
+`;
   };
 
   const handleCopyCode = () => {
@@ -196,7 +211,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       .then(async ({ default: JSZip }) => {
         const zip = new JSZip();
         const today = new Date().toISOString().split("T")[0];
-        const folderName = `terraform-modules-${today}`;
+        const folderName = `terraform-modules-${selectedRegion}-${today}`;
         const folder = zip.folder(folderName);
 
         if (folder) {
@@ -204,6 +219,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
           folder.file("main.tf", terraformCode.mainTf);
           folder.file("variables.tf", terraformCode.variablesTf);
           folder.file("outputs.tf", terraformCode.outputsTf);
+          folder.file("README.md", generateReadme());
 
           // Generate the zip file
           const content = await zip.generateAsync({ type: "blob" });
@@ -342,7 +358,8 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
                 <code className="bg-muted px-1 rounded">{branchName}</code>{" "}
                 branch in your Git repository at:
                 <code className="block mt-1 bg-muted p-1 rounded text-xs">
-                  /terraform/modules/{new Date().toISOString().split("T")[0]}
+                  /terraform/modules/{selectedRegion}/
+                  {new Date().toISOString().split("T")[0]}
                 </code>
               </AlertDescription>
             </div>

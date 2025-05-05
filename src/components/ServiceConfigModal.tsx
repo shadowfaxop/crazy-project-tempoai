@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useConfigContext } from "./ConfigContext";
 import {
   Dialog,
   DialogContent,
@@ -39,8 +40,19 @@ const ServiceConfigModal: React.FC<ServiceConfigModalProps> = ({
   initialConfig = {},
   onSave = () => {},
 }) => {
+  const { selectedRegion } = useConfigContext();
   const [config, setConfig] = useState(initialConfig);
   const [activeTab, setActiveTab] = useState("basic");
+
+  // Apply the global region to the config if region is not already set
+  useEffect(() => {
+    if (!config.region) {
+      setConfig((prev) => ({
+        ...prev,
+        region: selectedRegion,
+      }));
+    }
+  }, [selectedRegion, config.region]);
 
   const handleInputChange = (key: string, value: any) => {
     setConfig((prev: any) => ({
@@ -104,7 +116,7 @@ const ServiceConfigModal: React.FC<ServiceConfigModalProps> = ({
             <div className="grid gap-2">
               <Label htmlFor="region">Region</Label>
               <Select
-                value={config.region || "us-east-1"}
+                value={config.region || selectedRegion}
                 onValueChange={(value) => handleInputChange("region", value)}
               >
                 <SelectTrigger>
@@ -317,7 +329,7 @@ const ServiceConfigModal: React.FC<ServiceConfigModalProps> = ({
       <div className="grid gap-2">
         <Label htmlFor="region">Region</Label>
         <Select
-          value={config.region || "us-east-1"}
+          value={config.region || selectedRegion}
           onValueChange={(value) => handleInputChange("region", value)}
         >
           <SelectTrigger>
