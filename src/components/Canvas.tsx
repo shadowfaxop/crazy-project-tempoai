@@ -2,7 +2,18 @@ import React, { useState, useRef, useEffect } from "react";
 import { CanvasContainer } from "@/components/ui/canvas-container";
 import { Node } from "@/components/ui/node";
 import ConnectionLine from "@/components/ui/connection-line";
-import { Server, Database, HardDrive, Box, Cloud, Plus } from "lucide-react";
+import {
+  Server,
+  Database,
+  HardDrive,
+  Box,
+  Cloud,
+  Plus,
+  Network,
+  Shield,
+  Globe,
+  FileText,
+} from "lucide-react";
 import { ServiceType } from "@/lib/aws-service-configs";
 
 export interface NodeItem {
@@ -117,6 +128,14 @@ const Canvas: React.FC<CanvasProps> = ({
         return <HardDrive className="h-6 w-6" />;
       case "ecs":
         return <Cloud className="h-6 w-6" />;
+      case "subnet":
+        return <Network className="h-6 w-6" />;
+      case "securitygroup":
+        return <Shield className="h-6 w-6" />;
+      case "cdn":
+        return <Globe className="h-6 w-6" />;
+      case "cloudwatchlogs":
+        return <FileText className="h-6 w-6" />;
       default:
         return <Server className="h-6 w-6" />;
     }
