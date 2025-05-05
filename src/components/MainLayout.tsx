@@ -113,7 +113,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <ConfigProvider nodes={nodes}>
+    <ConfigProvider nodes={nodes} className="flex">
       <div className="h-screen flex flex-col overflow-hidden">
         <div className="border-b bg-background p-2 flex justify-between items-center">
           <h1 className="text-xl font-bold px-2">AWS Infrastructure Builder</h1>

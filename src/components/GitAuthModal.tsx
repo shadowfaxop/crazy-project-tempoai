@@ -41,18 +41,38 @@ const GitAuthModal: React.FC<GitAuthModalProps> = ({
     setError(null);
 
     try {
-      const success = await initGit(repoUrl, username, token);
+      // Validate repository URL format
+      if (
+        !repoUrl.match(
+          /^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/[\w-]+\/[\w.-]+(\.git)?$/,
+        )
+      ) {
+        setError(
+          "Invalid repository URL format. Please use HTTPS URL format from GitHub, GitLab, or Bitbucket.",
+        );
+        setIsConnecting(false);
+        return;
+      }
+
+      // Ensure URL ends with .git
+      const normalizedUrl = repoUrl.endsWith(".git")
+        ? repoUrl
+        : `${repoUrl}.git`;
+
+      const success = await initGit(normalizedUrl, username, token);
 
       if (success) {
         onSuccess();
         onOpenChange(false);
       } else {
         setError(
-          "Failed to connect to repository. Please check your credentials.",
+          "Failed to connect to repository. Please check your credentials and ensure the token has proper permissions.",
         );
       }
     } catch (err) {
-      setError(`Error connecting to repository: ${err.message}`);
+      setError(
+        `Error connecting to repository: ${err.message || "Unknown error"}`,
+      );
     } finally {
       setIsConnecting(false);
     }

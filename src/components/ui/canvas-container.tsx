@@ -10,7 +10,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       <div
         ref={ref}
         className={cn(
-          "relative w-full h-full overflow-hidden bg-secondary/20",
+          "relative w-full h-full overflow-auto bg-secondary/20",
           className,
         )}
         {...props}

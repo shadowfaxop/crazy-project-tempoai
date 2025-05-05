@@ -27,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onDragStart = () => {} }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
   return (
-    <div className="w-64 h-full border-r bg-background flex flex-col overflow-hidden">
+    <div className="w-72 h-full border-r bg-background flex flex-col overflow-hidden">
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">AWS Services</h2>
         <div className="mt-2 relative">
@@ -46,19 +46,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onDragStart = () => {} }) => {
         className="flex-1 flex flex-col overflow-hidden"
       >
         <div className="px-4 pt-4">
-          <TabsList className="w-full">
-            <TabsTrigger value="compute" className="flex-1">
-              Compute
-            </TabsTrigger>
-            <TabsTrigger value="storage" className="flex-1">
-              Storage
-            </TabsTrigger>
-            <TabsTrigger value="database" className="flex-1">
-              Database
-            </TabsTrigger>
-            <TabsTrigger value="network" className="flex-1">
-              Network
-            </TabsTrigger>
+          <TabsList className="w-full grid grid-cols-4 gap-1">
+            <TabsTrigger value="compute">Compute</TabsTrigger>
+            <TabsTrigger value="storage">Storage</TabsTrigger>
+            <TabsTrigger value="database">Database</TabsTrigger>
+            <TabsTrigger value="network">Network</TabsTrigger>
           </TabsList>
         </div>
 
