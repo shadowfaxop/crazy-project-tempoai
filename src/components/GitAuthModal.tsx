@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { initGit } from "@/lib/git-utils";
 
 interface GitAuthModalProps {
   open: boolean;
@@ -24,11 +23,12 @@ const GitAuthModal: React.FC<GitAuthModalProps> = ({
   onSuccess,
 }) => {
   const [repoUrl, setRepoUrl] = useState(
-    "https://github.com/shadowfaxop/crazy-project-tempoai",
+    "https://github.com/shadowfaxop/crazy-project-tempoai.git"
   );
   const [username, setUsername] = useState("shadowfaxop");
   const [token, setToken] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleConnect = async () => {
@@ -38,53 +38,41 @@ const GitAuthModal: React.FC<GitAuthModalProps> = ({
     }
 
     setIsConnecting(true);
+    setStatus("🔄 Connecting...");
     setError(null);
 
     try {
-      // Validate repository URL format
-      if (
-        !repoUrl.match(
-          /^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/[\w-]+\/[\w.-]+(\.git)?$/,
-        )
-      ) {
-        setError(
-          "Invalid repository URL format. Please use HTTPS URL format from GitHub, GitLab, or Bitbucket.",
-        );
-        setIsConnecting(false);
-        return;
-      }
+      const res = await fetch("http://localhost:4000/api/init-git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl, username, token }),
+      });
 
-      // Ensure URL ends with .git
-      const normalizedUrl = repoUrl.endsWith(".git")
-        ? repoUrl
-        : `${repoUrl}.git`;
+      const data = await res.json();
 
-      const success = await initGit(normalizedUrl, username, token);
-
-      if (success) {
+      if (data.success) {
+        setStatus("✅ Connected!");
         onSuccess();
         onOpenChange(false);
       } else {
-        setError(
-          "Failed to connect to repository. Please check your credentials and ensure the token has proper permissions.",
-        );
+        setStatus("❌ Failed: " + data.error);
       }
-    } catch (err) {
-      setError(
-        `Error connecting to repository: ${err.message || "Unknown error"}`,
-      );
+    } catch (err: any) {
+      console.error("💥 Git connect failed:", err);
+      setStatus("❌ Exception: " + err.message);
     } finally {
       setIsConnecting(false);
     }
   };
 
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Connect to Git Repository</DialogTitle>
           <DialogDescription>
-            Enter your Git repository details to enable real commits and pushes.
+            Enter your GitHub repository details to enable commits and pushes.
           </DialogDescription>
         </DialogHeader>
 
@@ -119,13 +107,12 @@ const GitAuthModal: React.FC<GitAuthModalProps> = ({
               placeholder="ghp_xxxxxxxxxxxx"
             />
             <p className="text-xs text-muted-foreground">
-              Token needs repo permissions to push changes
+              Token must have <code>repo</code> access to push
             </p>
           </div>
 
-          {error && (
-            <div className="text-sm text-destructive mt-2">{error}</div>
-          )}
+          {error && <div className="text-sm text-destructive">{error}</div>}
+          {status && <div className="text-sm text-muted-foreground">{status}</div>}
         </div>
 
         <DialogFooter>
