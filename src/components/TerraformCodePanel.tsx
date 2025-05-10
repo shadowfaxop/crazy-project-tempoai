@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ValidationAlertDialog from "./ValidationAlertDialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +15,7 @@ import { generateTerraformCode } from "@/api/terraform-api";
 import { NodeItem, ConnectionItem } from "./Canvas";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import GitAuthModal from "./GitAuthModal";
-import { createBranch, commitAndPushFiles } from "@/lib/git-utils";
+import { useConfigContext } from "./ConfigContext";
 
 interface TerraformCodePanelProps {
   nodes: NodeItem[];
@@ -32,6 +32,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   nodes,
   connections,
 }) => {
+  const { selectedRegion } = useConfigContext();
   const [activeTab, setActiveTab] = useState("main");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCodeGenerated, setIsCodeGenerated] = useState(false);
@@ -41,7 +42,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
     outputsTf: "",
   });
   const [branchCreated, setBranchCreated] = useState(false);
-  const [branchName, setBranchName] = useState("terraform_modules");
+  const [branchName, setBranchName] = useState("");
   const [showGitAuthModal, setShowGitAuthModal] = useState(false);
   const [isGitConnected, setIsGitConnected] = useState(false);
   const [gitError, setGitError] = useState<string | null>(null);
@@ -49,63 +50,31 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
 
+  useEffect(() => {
+    const gitConnected = localStorage.getItem("aws-infra-git-connected");
+    if (gitConnected === "true") setIsGitConnected(true);
+  }, []);
+
   const handleGenerateCode = async () => {
     if (isGenerating) return;
 
-    // Check if there are connections between nodes
     if (connections.length === 0 && nodes.length > 1) {
-      setValidationMessage(
-        "Please connect your resources before generating Terraform code.",
-      );
+      setValidationMessage("Please connect your resources before generating Terraform code.");
       setShowValidationAlert(true);
       return;
     }
 
-    // Check if all nodes are connected
     if (nodes.length > 1) {
       const connectedNodeIds = new Set<string>();
-
-      // Add all nodes that are part of connections
       connections.forEach((conn) => {
         connectedNodeIds.add(conn.sourceId);
         connectedNodeIds.add(conn.targetId);
       });
 
-      // Check if any node is not connected
-      const unconnectedNodes = nodes.filter(
-        (node) => !connectedNodeIds.has(node.id),
-      );
-
+      const unconnectedNodes = nodes.filter((node) => !connectedNodeIds.has(node.id));
       if (unconnectedNodes.length > 0) {
         const nodeNames = unconnectedNodes.map((n) => n.title).join(", ");
-        setValidationMessage(
-          `All resources must be connected. Unconnected resources: ${nodeNames}`,
-        );
-        setShowValidationAlert(true);
-        return;
-      }
-    }
-
-    // Check if all nodes are connected
-    if (nodes.length > 1) {
-      const connectedNodeIds = new Set<string>();
-
-      // Add all nodes that are part of connections
-      connections.forEach((conn) => {
-        connectedNodeIds.add(conn.sourceId);
-        connectedNodeIds.add(conn.targetId);
-      });
-
-      // Check if any node is not connected
-      const unconnectedNodes = nodes.filter(
-        (node) => !connectedNodeIds.has(node.id),
-      );
-
-      if (unconnectedNodes.length > 0) {
-        const nodeNames = unconnectedNodes.map((n) => n.title).join(", ");
-        setValidationMessage(
-          `All resources must be connected. Unconnected resources: ${nodeNames}`,
-        );
+        setValidationMessage(`All resources must be connected. Unconnected resources: ${nodeNames}`);
         setShowValidationAlert(true);
         return;
       }
@@ -118,7 +87,7 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       setIsCodeGenerated(true);
 
       if (isGitConnected) {
-        await handleCommitToGit();
+        await handleCommitToGit(result);
       }
     } catch (error) {
       console.error("Error generating Terraform code:", error);
@@ -130,85 +99,92 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
   const handleGitSuccess = () => {
     setIsGitConnected(true);
     setGitError(null);
+    localStorage.setItem("aws-infra-git-connected", "true");
   };
 
-  const handleCommitToGit = async () => {
+  const handleCommitToGit = async (code: TerraformFiles = terraformCode) => {
+    console.log("📤 Commit triggered");
     if (!isCodeGenerated || isCommitting) return;
 
     setIsCommitting(true);
     setGitError(null);
 
     try {
-      const branchSuccess = await createBranch(branchName);
-
-      if (!branchSuccess) {
-        setGitError("Failed to create or checkout branch");
-        return;
-      }
-
       const today = new Date().toISOString().split("T")[0];
-      const directory = `terraform/modules/${today}`;
-
-      const files = [
-        { name: "main.tf", content: terraformCode.mainTf },
-        { name: "variables.tf", content: terraformCode.variablesTf },
-        { name: "outputs.tf", content: terraformCode.outputsTf },
-      ];
-
-      const commitSuccess = await commitAndPushFiles(
-        files,
-        `Add Terraform modules for infrastructure - ${today}`,
+      const branch = `terraform_modules_${today}`;
+      const directory = `terraform/modules/${selectedRegion}/${today}`;
+      
+      console.log("📡 Sending push-terraform request...", {
+        branchName: branch,
         directory,
-      );
+        files: [
+          { name: "main.tf", length: code.mainTf.length },
+          { name: "variables.tf", length: code.variablesTf.length },
+          { name: "outputs.tf", length: code.outputsTf.length },
+        ],
+      });
 
-      if (commitSuccess) {
+      const response = await fetch("http://localhost:4000/api/push-terraform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchName: branch,
+          directory,
+          files: [
+            { name: "main.tf", content: code.mainTf },
+            { name: "variables.tf", content: code.variablesTf },
+            { name: "outputs.tf", content: code.outputsTf },
+            { name: "README.md", content: generateReadme() },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      console.log("📬 Response from push-terraform:", data);
+
+      if (data.success) {
         setBranchCreated(true);
+        setBranchName(branch);
       } else {
-        setGitError("Failed to commit and push files");
+        setGitError("Failed to push Terraform code to Git.");
       }
-    } catch (error) {
-      console.error("Error in Git operations:", error);
-      setGitError(`Git error: ${error.message || "Unknown error"}`);
+    } catch (err: any) {
+      console.error("Git push error:", err);
+      setGitError("Unexpected error while pushing code.");
     } finally {
       setIsCommitting(false);
     }
   };
 
+  const generateReadme = () => {
+    return `# AWS Infrastructure as Code\n\n## Region: ${selectedRegion}\n\nThis directory contains Terraform code for deploying AWS infrastructure.\n\n## Resources\n\n${nodes.map((node) => `- **${node.title}** (${node.type}): ${node.config?.name || node.id}`).join("\n")}\n\n## Deployment Instructions\n\n1. Install Terraform\n2. Run \`terraform init\`\n3. Run \`terraform plan\` to preview changes\n4. Run \`terraform apply\` to deploy the infrastructure\n\n## Generated on: ${new Date().toISOString()}`;
+  };
+
   const handleCopyCode = () => {
-    let codeToCopy = "";
-    switch (activeTab) {
-      case "main":
-        codeToCopy = terraformCode.mainTf;
-        break;
-      case "variables":
-        codeToCopy = terraformCode.variablesTf;
-        break;
-      case "outputs":
-        codeToCopy = terraformCode.outputsTf;
-        break;
-    }
+    const codeToCopy =
+      activeTab === "main"
+        ? terraformCode.mainTf
+        : activeTab === "variables"
+        ? terraformCode.variablesTf
+        : terraformCode.outputsTf;
     navigator.clipboard.writeText(codeToCopy);
   };
 
   const handleDownload = () => {
-    // Create a zip file with all terraform files
     import("jszip")
       .then(async ({ default: JSZip }) => {
         const zip = new JSZip();
         const today = new Date().toISOString().split("T")[0];
-        const folderName = `terraform-modules-${today}`;
+        const folderName = `terraform-modules-${selectedRegion}-${today}`;
         const folder = zip.folder(folderName);
 
         if (folder) {
-          // Add all terraform files to the zip
           folder.file("main.tf", terraformCode.mainTf);
           folder.file("variables.tf", terraformCode.variablesTf);
           folder.file("outputs.tf", terraformCode.outputsTf);
+          folder.file("README.md", generateReadme());
 
-          // Generate the zip file
           const content = await zip.generateAsync({ type: "blob" });
-
-          // Create download link
           const url = URL.createObjectURL(content);
           const a = document.createElement("a");
           a.href = url;
@@ -221,27 +197,15 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
       })
       .catch((err) => {
         console.error("Failed to create zip file:", err);
-        alert(
-          "Failed to create zip file. Downloading individual file instead.",
-        );
+        alert("Failed to create zip file. Downloading individual file instead.");
 
-        // Fallback to downloading individual file
-        let fileName = "";
-        let content = "";
-        switch (activeTab) {
-          case "main":
-            fileName = "main.tf";
-            content = terraformCode.mainTf;
-            break;
-          case "variables":
-            fileName = "variables.tf";
-            content = terraformCode.variablesTf;
-            break;
-          case "outputs":
-            fileName = "outputs.tf";
-            content = terraformCode.outputsTf;
-            break;
-        }
+        const fileName = `${activeTab}.tf`;
+        const content =
+          activeTab === "main"
+            ? terraformCode.mainTf
+            : activeTab === "variables"
+            ? terraformCode.variablesTf
+            : terraformCode.outputsTf;
 
         const blob = new Blob([content], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
@@ -314,18 +278,18 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
               <GitBranch className="h-4 w-4 mr-1" />
               {isGitConnected ? "Connected" : "Connect Git"}
             </Button>
-            {isGitConnected && isCodeGenerated && (
+            {/* Commit button (show when code generated) */}
+            {isCodeGenerated && (
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleCommitToGit}
+                onClick={() => {
+                  console.log("🐛 Commit button clicked");
+                  handleCommitToGit();
+                }}
                 disabled={isCommitting}
               >
-                <GitBranch
-                  className={`h-4 w-4 mr-1 ${
-                    isCommitting ? "animate-spin" : ""
-                  }`}
-                />
+                <GitBranch className={`h-4 w-4 mr-1 ${isCommitting ? "animate-spin" : ""}`} />
                 {isCommitting ? "Committing..." : "Commit to Git"}
               </Button>
             )}
@@ -342,7 +306,8 @@ const TerraformCodePanel: React.FC<TerraformCodePanelProps> = ({
                 <code className="bg-muted px-1 rounded">{branchName}</code>{" "}
                 branch in your Git repository at:
                 <code className="block mt-1 bg-muted p-1 rounded text-xs">
-                  /terraform/modules/{new Date().toISOString().split("T")[0]}
+                  /terraform/modules/{selectedRegion}/
+                  {new Date().toISOString().split("T")[0]}
                 </code>
               </AlertDescription>
             </div>

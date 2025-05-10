@@ -10,7 +10,8 @@
     "build-no-errors": "tsc ; vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "types:supabase": "npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types/supabase.ts"
+    "types:supabase": "npx supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types/supabase.ts",
+    "server": "tsx server.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.6.0",
@@ -45,18 +46,22 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.1.5",
+    "eslint-config-next": "^14.1.0",
+    "express": "^5.1.0",
     "framer-motion": "^11.18.0",
     "jszip": "^3.10.1",
-    "lucide-react": "^0.394.0",
+    "lucide-react": "^0.294.0",
+    "next": "^14.1.0",
     "react": "^18.2.0",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.51.5",
     "react-resizable-panels": "^2.0.19",
     "react-router": "^6.23.1",
-    "react-router-dom": "^6.23.1",
+    "react-router-dom": "^6.30.0",
     "simple-git": "^3.27.0",
     "tailwind-merge": "^2.3.0",
     "tailwindcss-animate": "^1.0.7",
@@ -72,7 +77,9 @@
     "postcss": "^8.4.38",
     "tailwindcss": "3.4.1",
     "tempo-devtools": "^2.0.102",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.2",
     "vite": "^6.2.3"
   }
 }
+

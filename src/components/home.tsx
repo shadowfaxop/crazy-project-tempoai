@@ -1,7 +1,11 @@
 import MainLayout from "./MainLayout";
 
 function Home() {
-  return <MainLayout />;
+  return (
+    <div className="w-full h-screen">
+      <MainLayout />
+    </div>
+  );
 }
 
 export default Home;

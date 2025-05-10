@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { TagInput } from "@/components/ui/tag-input";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Globe } from "lucide-react";
 import {
   SERVICE_CONFIGS,
   ServiceType,
@@ -172,36 +173,145 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     // Handle dynamic options for specific fields
     let options = field.options || [];
 
-    // Add region selector at the top of the form if this is a node configuration
-    if (selectedNode && field.name === "name" && activeCategory === "General") {
-      // This is a hack to add region selector at the top
+    // For region fields, use the global selected region as default
+    if (field.name === "region" && !formValues[field.name]) {
       setTimeout(() => {
-        const regionSelector = document.getElementById("region-selector");
-        if (!regionSelector) {
-          const container = document.createElement("div");
-          container.id = "region-selector";
-          container.className = "space-y-2 mb-4";
-          container.innerHTML = `
-            <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">AWS Region</label>
-            <select class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-              ${AWS_REGIONS.map((region) => `<option value="${region.value}"${region.value === selectedRegion ? " selected" : ""}>${region.label}</option>`).join("")}
-            </select>
-          `;
-
-          const firstField = document.querySelector(".space-y-4");
-          if (firstField) {
-            firstField.parentNode.insertBefore(container, firstField);
-
-            // Add event listener
-            const select = container.querySelector("select");
-            if (select) {
-              select.addEventListener("change", (e) => {
-                setSelectedRegion((e.target as HTMLSelectElement).value);
-              });
-            }
-          }
-        }
+        handleInputChange(field.name, selectedRegion);
       }, 0);
+    }
+
+    // Dynamically update options for availability zone based on selected region
+    if (field.name === "availability_zone") {
+      options = availabilityZones.map((az) => ({ value: az, label: az }));
+    }
+
+    // Render different input types based on field type
+    switch (field.type) {
+      case "text":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <Input
+              id={field.name}
+              value={value || ""}
+              onChange={(e) => handleInputChange(field.name, e.target.value)}
+              placeholder={field.placeholder}
+            />
+            {field.description && (
+              <p className="text-xs text-muted-foreground">
+                {field.description}
+              </p>
+            )}
+          </div>
+        );
+
+      case "number":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <Input
+              id={field.name}
+              type="number"
+              value={value || ""}
+              onChange={(e) =>
+                handleInputChange(field.name, parseInt(e.target.value, 10))
+              }
+              min={field.min}
+              max={field.max}
+            />
+          </div>
+        );
+
+      case "select":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <Select
+              value={value || ""}
+              onValueChange={(val) => handleInputChange(field.name, val)}
+            >
+              <SelectTrigger id={field.name}>
+                <SelectValue
+                  placeholder={`Select ${field.label.toLowerCase()}`}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+
+      case "boolean":
+        return (
+          <div
+            key={field.name}
+            className="flex items-center justify-between space-y-0 py-2"
+          >
+            <Label htmlFor={field.name}>{field.label}</Label>
+            <Switch
+              id={field.name}
+              checked={!!value}
+              onCheckedChange={(checked) =>
+                handleInputChange(field.name, checked)
+              }
+            />
+          </div>
+        );
+
+      case "tags":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <TagInput
+              id={field.name}
+              placeholder={field.placeholder || "Add tag..."}
+              tags={value || {}}
+              onTagsChange={(tags) => handleInputChange(field.name, tags)}
+            />
+            {field.description && (
+              <p className="text-xs text-muted-foreground">
+                {field.description}
+              </p>
+            )}
+          </div>
+        );
+
+      case "multiselect":
+        return (
+          <div key={field.name} className="space-y-2">
+            <Label htmlFor={field.name}>
+              {field.label}
+              {field.required && <span className="text-destructive"> *</span>}
+            </Label>
+            <MultiSelect
+              id={field.name}
+              options={options}
+              selected={value || []}
+              onChange={(selected) => handleInputChange(field.name, selected)}
+              placeholder={`Select ${field.label.toLowerCase()}`}
+            />
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
@@ -337,7 +447,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   };
 
   return (
-    <div className="w-80 h-full border-l bg-background flex flex-col">
+    <div className="w-full h-full border-l bg-background flex flex-col">
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">
           {selectedNode
@@ -346,6 +456,33 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
               ? "Connection Configuration"
               : "Configuration"}
         </h2>
+
+        {/* Global AWS Region Selector */}
+        <div className="mt-4">
+          <Label htmlFor="global-region" className="flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            <span>Default AWS Region</span>
+          </Label>
+          <Select
+            value={selectedRegion}
+            onValueChange={(value) => setSelectedRegion(value)}
+          >
+            <SelectTrigger id="global-region" className="mt-1">
+              <SelectValue placeholder="Select AWS region" />
+            </SelectTrigger>
+            <SelectContent>
+              {AWS_REGIONS.map((region) => (
+                <SelectItem key={region.value} value={region.value}>
+                  {region.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            This region will be used as the default for all services
+          </p>
+        </div>
+        <Separator className="my-4" />
       </div>
 
       {selectedNode || selectedConnection ? (

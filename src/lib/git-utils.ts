@@ -12,59 +12,59 @@ export async function initGit(
   token: string,
 ): Promise<boolean> {
   try {
-    // Make sure URL ends with .git
+    // Ensure .git suffix
     if (!repoUrl.endsWith(".git")) {
       repoUrl += ".git";
     }
 
-    // Build authenticated remote URL with proper token format
-    // Ensure special characters in username and token are properly encoded
+    // Encode token for special characters
     const encodedToken = encodeURIComponent(token);
     remoteUrlWithAuth = repoUrl.replace(
       "https://",
       `https://${username}:${encodedToken}@`,
     );
 
-    // Initialize git client with increased timeout
+    console.log("🔧 [initGit] Starting Git init with repo:", repoUrl);
+    console.log("🔐 [initGit] Using authenticated remote:", remoteUrlWithAuth);
+
+    // Init Git with timeout
     git = simpleGit({ timeout: 30000 });
 
-    // Check if repo directory exists and is a git repo
     try {
       await fs.access("repo");
       git = simpleGit("repo", { timeout: 30000 });
       const isRepo = await git.checkIsRepo();
 
       if (!isRepo) {
-        // Remove directory if it exists but is not a git repo
+        console.warn("⚠️ Not a Git repo. Re-cloning...");
         await fs.rm("repo", { recursive: true, force: true });
         git = simpleGit({ timeout: 30000 });
-        console.log("Cloning repository...");
         await git.clone(remoteUrlWithAuth, "repo");
         git = simpleGit("repo", { timeout: 30000 });
       } else {
-        // If it's a repo, update remote URL with auth
         await git.remote(["set-url", "origin", remoteUrlWithAuth]);
-        console.log("Fetching from remote...");
         await git.fetch();
+        console.log("📦 Fetched remote repo updates.");
       }
-    } catch (err) {
-      // Directory doesn't exist, clone fresh
-      console.log("Cloning fresh repository...");
+    } catch (fsErr) {
+      console.log("📂 Directory missing. Cloning...");
       await git.clone(remoteUrlWithAuth, "repo");
       git = simpleGit("repo", { timeout: 30000 });
     }
 
-    // Set Git config (required by GitHub)
+    // Git config
     await git.addConfig("user.name", username);
     await git.addConfig("user.email", `${username}@users.noreply.github.com`);
 
-    // Test connection with a simple git operation
+    // Simple connectivity test
     await git.fetch(["--depth=1"]);
 
-    console.log("✅ Git repository initialized successfully");
+    console.log("✅ Git repo initialized successfully.");
     return true;
-  } catch (error) {
-    console.error("❌ Git init failed:", error);
+  } catch (error: any) {
+    console.error("❌ Git init failed");
+    console.error("🧾 Error:", error.message);
+    console.error("📚 Stack:", error.stack);
     return false;
   }
 }
@@ -98,31 +98,27 @@ export async function commitAndPushFiles(
 
   try {
     const baseDir = path.join("repo", directory);
-
     await fs.mkdir(baseDir, { recursive: true });
 
-    // Add all files to git
     for (const file of files) {
       const filePath = path.join(baseDir, file.name);
       await fs.writeFile(filePath, file.content);
-      await git.add(filePath);
+      // Use relative path from inside repo for cross-platform safety
+      const relativeFilePath = path.relative("repo", filePath).replace(/\\/g, "/");
+      await git.add(relativeFilePath);
     }
 
-    // Check if there are changes to commit
     const status = await git.status();
     if (status.files.length === 0) {
-      console.log("No changes to commit");
-      return true; // No changes is not an error
+      console.log("ℹ️ No changes to commit.");
+      return true;
     }
 
     await git.commit(commitMessage);
-
     const currentBranch = (await git.branch()).current;
-
-    // Push using remote URL with auth explicitly
     await git.push(remoteUrlWithAuth, currentBranch, ["--force"]);
-    console.log(`✅ Successfully pushed to ${currentBranch}`);
 
+    console.log(`✅ Pushed to ${currentBranch}`);
     return true;
   } catch (error) {
     console.error("❌ Git commit/push failed:", error);
